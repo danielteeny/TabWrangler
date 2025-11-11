@@ -13,6 +13,17 @@
       <p class="subtitle">Organize and manage your tabs</p>
     </header>
 
+    <div class="scope-selector">
+      <label>
+        <input type="radio" name="scope" value="current" checked>
+        Current Window
+      </label>
+      <label>
+        <input type="radio" name="scope" value="all">
+        All Windows
+      </label>
+    </div>
+
     <div class="tab-stats">
       <div class="stat">
         <span class="stat-label">Open Tabs:</span>
@@ -35,6 +46,7 @@
           <option value="subdomain">Subdomain</option>
           <option value="domain">Domain Only</option>
         </select>
+        <p class="match-mode-description" id="matchModeDesc">Host + port + path + query parameters must match</p>
       </div>
       <div class="setting-group">
         <label class="checkbox-label">
@@ -88,18 +100,7 @@
       </div>
     </div>
 
-    <div class="scope-selector">
-      <label>
-        <input type="radio" name="scope" value="current" checked>
-        Current Window
-      </label>
-      <label>
-        <input type="radio" name="scope" value="all">
-        All Windows
-      </label>
-    </div>
-
-    <div id="duplicatesList" class="duplicates-list hidden"></div>
+    <div id="duplicatesList" class="duplicates-list"></div>
     <div id="sessionsList" class="sessions-list hidden"></div>
   </div>
 

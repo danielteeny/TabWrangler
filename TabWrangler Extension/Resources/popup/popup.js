@@ -23,6 +23,24 @@ async function loadSettings() {
   document.getElementById('matchMode').value = userSettings.matchMode;
   document.getElementById('autoDetect').checked = userSettings.autoDetect;
   document.getElementById('keepNewest').checked = userSettings.keepNewest;
+
+  // Update match mode description
+  updateMatchModeDescription();
+}
+
+// Update match mode description
+function updateMatchModeDescription() {
+  const matchMode = document.getElementById('matchMode').value;
+  const descriptions = {
+    'exact': 'Complete URL must match exactly (including hash)',
+    'fullpath': 'Host + port + path + query parameters must match',
+    'path': 'Host + port + path only (ignores query parameters)',
+    'port': 'Hostname + port only (perfect for self-hosted services)',
+    'subdomain': 'Exact subdomain match (www.example.com ≠ api.example.com)',
+    'domain': 'Root domain only (www.example.com = api.example.com)'
+  };
+
+  document.getElementById('matchModeDesc').textContent = descriptions[matchMode] || '';
 }
 
 // Save settings
@@ -32,7 +50,9 @@ async function saveSettings() {
   userSettings.keepNewest = document.getElementById('keepNewest').checked;
 
   await browser.storage.sync.set(userSettings);
+  updateMatchModeDescription();
   await updateStats();
+  await updateDuplicatesList();
 }
 
 // Update tab statistics
@@ -42,16 +62,149 @@ async function updateStats() {
 
   document.getElementById('totalTabs').textContent = tabs.length;
   document.getElementById('duplicateCount').textContent = duplicates.totalDuplicates;
+
+  // Update duplicates list
+  await updateDuplicatesList();
+}
+
+// Update duplicates manifest list
+async function updateDuplicatesList() {
+  const tabs = await getTabs();
+  const duplicates = TabUtils.findDuplicates(tabs, userSettings.matchMode);
+
+  const listElement = document.getElementById('duplicatesList');
+
+  if (duplicates.groups.length === 0) {
+    listElement.innerHTML = '<p style="color: #86868b; text-align: center; padding: 12px;">No duplicates found</p>';
+  } else {
+    listElement.innerHTML = '<h3>Duplicate Tabs</h3>';
+
+    duplicates.groups.forEach((group, groupIndex) => {
+      const groupContainer = document.createElement('div');
+      groupContainer.className = 'duplicate-group-container';
+
+      // Main group header
+      const groupHeader = document.createElement('div');
+      groupHeader.className = 'duplicate-group';
+      groupHeader.innerHTML = `
+        <button class="expand-btn" data-group-index="${groupIndex}" title="Expand to see individual tabs">▶</button>
+        <div class="count-badge">${group.tabs.length}</div>
+        <div class="url" title="${escapeHtml(group.url)}">${escapeHtml(group.url)}</div>
+        <button class="close-group-btn" data-group-index="${groupIndex}" title="Close these duplicates">✕</button>
+      `;
+
+      // Expanded tabs list (hidden by default)
+      const tabsList = document.createElement('div');
+      tabsList.className = 'tabs-list hidden';
+      tabsList.dataset.groupIndex = groupIndex;
+
+      group.tabs.forEach((tab, tabIndex) => {
+        const tabItem = document.createElement('div');
+        tabItem.className = 'tab-item';
+        tabItem.innerHTML = `
+          <div class="tab-title" data-tab-id="${tab.id}" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title)}</div>
+          <button class="close-tab-btn" data-tab-id="${tab.id}" title="Close this tab">✕</button>
+        `;
+        tabsList.appendChild(tabItem);
+      });
+
+      groupContainer.appendChild(groupHeader);
+      groupContainer.appendChild(tabsList);
+      listElement.appendChild(groupContainer);
+    });
+
+    // Add event listeners to expand buttons
+    listElement.querySelectorAll('.expand-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const groupIndex = btn.dataset.groupIndex;
+        const tabsList = listElement.querySelector(`.tabs-list[data-group-index="${groupIndex}"]`);
+        const isExpanded = !tabsList.classList.contains('hidden');
+
+        if (isExpanded) {
+          tabsList.classList.add('hidden');
+          btn.textContent = '▶';
+        } else {
+          tabsList.classList.remove('hidden');
+          btn.textContent = '▼';
+        }
+      });
+    });
+
+    // Add event listeners to close group buttons
+    listElement.querySelectorAll('.close-group-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const groupIndex = parseInt(e.target.dataset.groupIndex);
+        await closeSpecificDuplicateGroup(duplicates.groups[groupIndex]);
+      });
+    });
+
+    // Add event listeners to individual tab titles (click to switch to tab)
+    listElement.querySelectorAll('.tab-title').forEach(titleDiv => {
+      titleDiv.addEventListener('click', async (e) => {
+        const tabId = parseInt(e.target.dataset.tabId);
+        await browser.tabs.update(tabId, { active: true });
+        const tab = await browser.tabs.get(tabId);
+        await browser.windows.update(tab.windowId, { focused: true });
+      });
+    });
+
+    // Add event listeners to individual tab close buttons
+    listElement.querySelectorAll('.close-tab-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const tabId = parseInt(e.target.dataset.tabId);
+        await browser.tabs.remove(tabId);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await updateStats();
+      });
+    });
+  }
+}
+
+// Close a specific duplicate group
+async function closeSpecificDuplicateGroup(group) {
+  const tabsToClose = [];
+
+  // Keep the first tab (or newest if setting enabled)
+  const tabsToKeep = userSettings.keepNewest ?
+    [group.tabs.sort((a, b) => b.id - a.id)[0]] :
+    [group.tabs[0]];
+
+  group.tabs.forEach(tab => {
+    if (!tabsToKeep.includes(tab)) {
+      tabsToClose.push(tab.id);
+    }
+  });
+
+  if (tabsToClose.length > 0) {
+    await browser.tabs.remove(tabsToClose);
+    // Wait a bit for browser to update tab list
+    await new Promise(resolve => setTimeout(resolve, 100));
+    await updateStats();
+  }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // Get tabs based on current scope
 async function getTabs() {
+  let tabs;
   if (currentScope === 'current') {
     const currentWindow = await browser.windows.getCurrent();
-    return await browser.tabs.query({ windowId: currentWindow.id });
+    tabs = await browser.tabs.query({ windowId: currentWindow.id });
   } else {
-    return await browser.tabs.query({});
+    tabs = await browser.tabs.query({});
   }
+
+  // Filter out pinned tabs
+  return tabs.filter(tab => !tab.pinned);
 }
 
 // Attach event listeners
@@ -108,29 +261,8 @@ function attachEventListeners() {
   });
 }
 
-// Find and display duplicates
+// Find and display duplicates (refresh the list)
 async function findAndDisplayDuplicates() {
-  const tabs = await getTabs();
-  const duplicates = TabUtils.findDuplicates(tabs, userSettings.matchMode);
-
-  const listElement = document.getElementById('duplicatesList');
-  listElement.innerHTML = '<h3>Duplicate Tabs Found</h3>';
-
-  if (duplicates.groups.length === 0) {
-    listElement.innerHTML += '<p style="color: #86868b;">No duplicates found!</p>';
-  } else {
-    duplicates.groups.forEach(group => {
-      const groupDiv = document.createElement('div');
-      groupDiv.className = 'duplicate-group';
-      groupDiv.innerHTML = `
-        <div class="url">${group.url}</div>
-        <div class="count">${group.tabs.length} duplicates</div>
-      `;
-      listElement.appendChild(groupDiv);
-    });
-  }
-
-  listElement.classList.remove('hidden');
   await updateStats();
 }
 
@@ -155,8 +287,10 @@ async function closeDuplicates() {
 
   if (tabsToClose.length > 0) {
     await browser.tabs.remove(tabsToClose);
-    alert(`Closed ${tabsToClose.length} duplicate tabs!`);
+    // Wait a bit for browser to update tab list
+    await new Promise(resolve => setTimeout(resolve, 100));
     await updateStats();
+    alert(`Closed ${tabsToClose.length} duplicate tabs!`);
   } else {
     alert('No duplicates to close!');
   }
