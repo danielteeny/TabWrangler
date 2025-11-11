@@ -60,6 +60,13 @@
           <span>Auto-detect duplicates</span>
         </label>
       </div>
+      <div class="setting-group">
+        <label for="consolidationThreshold">
+          Consolidation threshold: <span id="thresholdValue">3</span> tabs
+        </label>
+        <input type="range" id="consolidationThreshold" min="2" max="10" value="3" class="threshold-slider">
+        <p class="setting-description">Minimum tabs in a window to suggest it as consolidation target</p>
+      </div>
     </div>
 
     <div class="actions">
@@ -77,13 +84,13 @@
 
       <div class="action-section">
         <h3>Tab Organization</h3>
-        <button class="action-btn" id="groupByDomain">
-          <span class="icon">📁</span>
-          Group by Domain
+        <button class="action-btn" id="analyzeOrganization">
+          <span class="icon">🔍</span>
+          Analyze Organization
         </button>
-        <button class="action-btn" id="reorderTabs">
-          <span class="icon">⇅</span>
-          Reorder by Domain
+        <button class="action-btn" id="smartOrganize">
+          <span class="icon">✨</span>
+          Smart Organize
         </button>
       </div>
 
@@ -101,6 +108,7 @@
     </div>
 
     <div id="duplicatesList" class="duplicates-list"></div>
+    <div id="consolidationSuggestions" class="consolidation-suggestions hidden"></div>
     <div id="sessionsList" class="sessions-list hidden"></div>
   </div>
 

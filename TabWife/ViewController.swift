@@ -1,6 +1,6 @@
 //
 //  ViewController.swift
-//  TabWrangler
+//  TabWife
 //
 //  Created by Daniel Teeny on 11/10/25.
 //
@@ -9,7 +9,7 @@ import Cocoa
 import SafariServices
 import WebKit
 
-let extensionBundleIdentifier = "com.yourCompany.TabWrangler.Extension"
+let extensionBundleIdentifier = "com.yourCompany.TabWife.Extension"
 
 class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHandler {
 

@@ -154,6 +154,99 @@ const TabUtils = {
         return 0;
       }
     });
+  },
+
+  // Analyze domain distribution across all windows
+  analyzeDomainDistribution(windows) {
+    const distribution = {};
+
+    windows.forEach(window => {
+      window.tabs.forEach(tab => {
+        try {
+          const url = new URL(tab.url);
+          const domain = this.getRootDomain(url.hostname);
+          const key = url.port ? `${domain}:${url.port}` : domain;
+
+          if (!distribution[key]) {
+            distribution[key] = {
+              domain: key,
+              totalTabs: 0,
+              windows: {}
+            };
+          }
+
+          if (!distribution[key].windows[window.id]) {
+            distribution[key].windows[window.id] = {
+              windowId: window.id,
+              tabs: []
+            };
+          }
+
+          distribution[key].windows[window.id].tabs.push(tab);
+          distribution[key].totalTabs++;
+        } catch (e) {
+          // Skip invalid URLs
+        }
+      });
+    });
+
+    return distribution;
+  },
+
+  // Generate consolidation suggestions based on threshold
+  generateConsolidationSuggestions(windows, threshold = 3) {
+    const distribution = this.analyzeDomainDistribution(windows);
+    const suggestions = [];
+
+    // For each domain, find if there's a "home" window with enough tabs
+    for (const domain in distribution) {
+      const domainData = distribution[domain];
+      const windowIds = Object.keys(domainData.windows);
+
+      // Skip if all tabs are in one window
+      if (windowIds.length === 1) continue;
+
+      // Find the window with the most tabs for this domain
+      let homeWindowId = null;
+      let maxTabCount = 0;
+
+      windowIds.forEach(windowId => {
+        const count = domainData.windows[windowId].tabs.length;
+        if (count > maxTabCount) {
+          maxTabCount = count;
+          homeWindowId = windowId;
+        }
+      });
+
+      // Only suggest if home window meets threshold
+      if (maxTabCount < threshold) continue;
+
+      // Collect stray tabs from other windows
+      const strayTabs = [];
+      windowIds.forEach(windowId => {
+        if (windowId !== homeWindowId) {
+          domainData.windows[windowId].tabs.forEach(tab => {
+            strayTabs.push({
+              tab: tab,
+              fromWindowId: parseInt(windowId)
+            });
+          });
+        }
+      });
+
+      if (strayTabs.length > 0) {
+        suggestions.push({
+          domain: domain,
+          homeWindowId: parseInt(homeWindowId),
+          homeWindowTabCount: maxTabCount,
+          strayTabs: strayTabs,
+          totalStrayTabs: strayTabs.length
+        });
+      }
+    }
+
+    // Sort by number of stray tabs (most impactful first)
+    return suggestions.sort((a, b) => b.totalStrayTabs - a.totalStrayTabs);
   }
 };
 

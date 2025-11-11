@@ -15,7 +15,8 @@ async function loadSettings() {
   const result = await browser.storage.sync.get({
     matchMode: 'fullpath',
     autoDetect: true,
-    keepNewest: true
+    keepNewest: true,
+    consolidationThreshold: 3
   });
   userSettings = result;
 
@@ -23,6 +24,8 @@ async function loadSettings() {
   document.getElementById('matchMode').value = userSettings.matchMode;
   document.getElementById('autoDetect').checked = userSettings.autoDetect;
   document.getElementById('keepNewest').checked = userSettings.keepNewest;
+  document.getElementById('consolidationThreshold').value = userSettings.consolidationThreshold;
+  document.getElementById('thresholdValue').textContent = userSettings.consolidationThreshold;
 
   // Update match mode description
   updateMatchModeDescription();
@@ -48,6 +51,7 @@ async function saveSettings() {
   userSettings.matchMode = document.getElementById('matchMode').value;
   userSettings.autoDetect = document.getElementById('autoDetect').checked;
   userSettings.keepNewest = document.getElementById('keepNewest').checked;
+  userSettings.consolidationThreshold = parseInt(document.getElementById('consolidationThreshold').value);
 
   await browser.storage.sync.set(userSettings);
   updateMatchModeDescription();
@@ -227,14 +231,14 @@ function attachEventListeners() {
     await closeDuplicates();
   });
 
-  // Group by domain
-  document.getElementById('groupByDomain').addEventListener('click', async () => {
-    await groupTabsByDomain();
+  // Analyze organization
+  document.getElementById('analyzeOrganization').addEventListener('click', async () => {
+    await analyzeAndShowSuggestions();
   });
 
-  // Reorder tabs
-  document.getElementById('reorderTabs').addEventListener('click', async () => {
-    await reorderTabsByDomain();
+  // Smart organize
+  document.getElementById('smartOrganize').addEventListener('click', async () => {
+    await smartOrganize();
   });
 
   // Save session
@@ -257,6 +261,14 @@ function attachEventListeners() {
   });
 
   document.getElementById('keepNewest').addEventListener('change', async () => {
+    await saveSettings();
+  });
+
+  document.getElementById('consolidationThreshold').addEventListener('input', (e) => {
+    document.getElementById('thresholdValue').textContent = e.target.value;
+  });
+
+  document.getElementById('consolidationThreshold').addEventListener('change', async () => {
     await saveSettings();
   });
 }
@@ -296,28 +308,346 @@ async function closeDuplicates() {
   }
 }
 
-// Group tabs by domain
-async function groupTabsByDomain() {
-  const tabs = await getTabs();
-  const grouped = TabUtils.groupByDomain(tabs);
+// Analyze organization and show suggestions
+async function analyzeAndShowSuggestions() {
+  // Get all windows with their tabs
+  const allWindows = await browser.windows.getAll({ populate: true });
 
-  alert(`Found ${Object.keys(grouped).length} domain groups. Check console for details.`);
-  console.log('Grouped tabs:', grouped);
+  // Filter out pinned tabs from each window
+  const windows = allWindows.map(window => ({
+    id: window.id,
+    tabs: window.tabs.filter(tab => !tab.pinned)
+  }));
+
+  const suggestions = TabUtils.generateConsolidationSuggestions(
+    windows,
+    userSettings.consolidationThreshold
+  );
+
+  displayConsolidationSuggestions(suggestions);
 }
 
-// Reorder tabs by domain
-async function reorderTabsByDomain() {
-  const tabs = await getTabs();
-  const grouped = TabUtils.groupByDomain(tabs);
+// Smart organize - automatically apply all suggestions
+async function smartOrganize() {
+  const allWindows = await browser.windows.getAll({ populate: true });
+  const windows = allWindows.map(window => ({
+    id: window.id,
+    tabs: window.tabs.filter(tab => !tab.pinned)
+  }));
 
-  let index = 0;
-  for (const domain in grouped) {
-    for (const tab of grouped[domain]) {
-      await browser.tabs.move(tab.id, { index: index++ });
+  const suggestions = TabUtils.generateConsolidationSuggestions(
+    windows,
+    userSettings.consolidationThreshold
+  );
+
+  if (suggestions.length === 0) {
+    alert('No consolidation opportunities found!');
+    return;
+  }
+
+  // Show warning if first time
+  const shouldProceed = await showMoveWarningIfNeeded();
+  if (!shouldProceed) return;
+
+  let totalMoved = 0;
+  for (const suggestion of suggestions) {
+    for (const stray of suggestion.strayTabs) {
+      try {
+        // Safari doesn't support browser.tabs.move with windowId parameter
+        // Workaround: create new tab in target window, then close original
+        await browser.tabs.create({
+          windowId: suggestion.homeWindowId,
+          url: stray.tab.url,
+          active: false
+        });
+
+        await browser.tabs.remove(stray.tab.id);
+        totalMoved++;
+      } catch (e) {
+        console.error('Error moving tab:', e);
+      }
     }
   }
 
-  alert('Tabs reordered by domain!');
+  await new Promise(resolve => setTimeout(resolve, 200));
+  alert(`Smart Organize complete! Moved ${totalMoved} tabs to their domain groups.`);
+
+  // Clear suggestions display
+  document.getElementById('consolidationSuggestions').innerHTML = '';
+  document.getElementById('consolidationSuggestions').classList.add('hidden');
+}
+
+// Display consolidation suggestions
+function displayConsolidationSuggestions(suggestions) {
+  const container = document.getElementById('consolidationSuggestions');
+
+  if (suggestions.length === 0) {
+    container.innerHTML = '<p style="color: #86868b; text-align: center; padding: 12px;">No consolidation opportunities found</p>';
+    container.classList.remove('hidden');
+    return;
+  }
+
+  container.innerHTML = '<h3>Organization Suggestions</h3>';
+
+  suggestions.forEach((suggestion, suggestionIndex) => {
+    const suggestionDiv = document.createElement('div');
+    suggestionDiv.className = 'consolidation-suggestion';
+
+    // Group by source window for better organization
+    const byWindow = {};
+    suggestion.strayTabs.forEach(stray => {
+      if (!byWindow[stray.fromWindowId]) {
+        byWindow[stray.fromWindowId] = [];
+      }
+      byWindow[stray.fromWindowId].push(stray);
+    });
+
+    let tabsListHTML = '';
+    for (const windowId in byWindow) {
+      const tabs = byWindow[windowId];
+      tabsListHTML += `
+        <div class="stray-window-group">
+          <label class="stray-checkbox-label">
+            <input type="checkbox" class="stray-window-checkbox" data-suggestion="${suggestionIndex}" data-window="${windowId}" checked>
+            <span>Move ${tabs.length} tab${tabs.length > 1 ? 's' : ''} from <span class="window-link" data-window-id="${windowId}">Window ${windowId}</span></span>
+          </label>
+          <div class="stray-tabs-list">
+            ${tabs.map(stray => `
+              <div class="stray-tab clickable" data-tab-id="${stray.tab.id}" data-window-id="${stray.fromWindowId}" title="${escapeHtml(stray.tab.title)}">
+                ${escapeHtml(stray.tab.title.substring(0, 60))}${stray.tab.title.length > 60 ? '...' : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    suggestionDiv.innerHTML = `
+      <div class="suggestion-header">
+        <strong>${escapeHtml(suggestion.domain)}</strong>
+        <span class="suggestion-count"><span class="window-link" data-window-id="${suggestion.homeWindowId}">Window ${suggestion.homeWindowId}</span> has ${suggestion.homeWindowTabCount} tabs</span>
+      </div>
+      <div class="suggestion-body">
+        ${tabsListHTML}
+      </div>
+      <div class="suggestion-actions">
+        <button class="move-selected-btn" data-suggestion="${suggestionIndex}">Move Selected</button>
+        <button class="move-all-btn" data-suggestion="${suggestionIndex}">Move All</button>
+      </div>
+    `;
+
+    // Add event listeners for checkboxes and buttons
+    container.appendChild(suggestionDiv);
+  });
+
+  // Add event listeners for move buttons
+  const selectedBtns = container.querySelectorAll('.move-selected-btn');
+  console.log('Found move-selected buttons:', selectedBtns.length);
+  if (selectedBtns.length === 0) {
+    alert('ERROR: No move-selected buttons found!');
+  }
+  selectedBtns.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      console.log('Move selected button clicked!', e.target.dataset.suggestion);
+      const suggestionIndex = parseInt(e.target.dataset.suggestion);
+      await moveSelectedTabs(suggestions[suggestionIndex], suggestionIndex);
+    });
+  });
+
+  const allBtns = container.querySelectorAll('.move-all-btn');
+  console.log('Found move-all buttons:', allBtns.length);
+  if (allBtns.length === 0) {
+    alert('ERROR: No move-all buttons found!');
+  }
+  allBtns.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      console.log('Move all button clicked!', e.target.dataset.suggestion);
+      const suggestionIndex = parseInt(e.target.dataset.suggestion);
+      await moveAllTabs(suggestions[suggestionIndex]);
+    });
+  });
+
+  // Add click handlers for tabs to switch to them
+  container.querySelectorAll('.stray-tab.clickable').forEach(tabDiv => {
+    tabDiv.addEventListener('click', async (e) => {
+      const tabId = parseInt(e.target.dataset.tabId);
+      const windowId = parseInt(e.target.dataset.windowId);
+      await browser.tabs.update(tabId, { active: true });
+      await browser.windows.update(windowId, { focused: true });
+    });
+  });
+
+  // Add click handlers for window links to focus windows
+  container.querySelectorAll('.window-link').forEach(link => {
+    link.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const windowId = parseInt(e.target.dataset.windowId);
+      try {
+        const currentWindow = await browser.windows.getCurrent();
+        if (currentWindow.id === windowId) {
+          // Already in this window
+          return;
+        }
+        await browser.windows.update(windowId, { focused: true });
+      } catch (err) {
+        console.error('Error focusing window:', err);
+      }
+    });
+  });
+
+  container.classList.remove('hidden');
+}
+
+// Show one-time warning about tab reloading
+async function showMoveWarningIfNeeded() {
+  console.log('showMoveWarningIfNeeded called');
+
+  const result = await browser.storage.local.get('hasSeenMoveWarning');
+  console.log('Storage result:', result);
+
+  const hasSeenMoveWarning = result.hasSeenMoveWarning;
+  console.log('hasSeenMoveWarning:', hasSeenMoveWarning);
+
+  if (!hasSeenMoveWarning) {
+    console.log('Showing warning dialog...');
+
+    // TEMPORARY: Skip dialog for testing
+    console.log('SKIPPING DIALOG FOR TESTING - proceeding automatically');
+    await browser.storage.local.set({ hasSeenMoveWarning: true });
+    return true;
+
+    /* Original dialog code - commented out for testing
+    const proceed = confirm(
+      'Moving tabs between windows will reload the pages.\n\n' +
+      'Tab history, form data, and scroll position will be lost.\n\n' +
+      'This is a Safari limitation. Continue?'
+    );
+
+    console.log('User chose:', proceed);
+
+    if (proceed) {
+      await browser.storage.local.set({ hasSeenMoveWarning: true });
+      console.log('Saved warning preference');
+      return true;
+    }
+    return false;
+    */
+  }
+
+  console.log('Already seen warning, proceeding');
+  return true;
+}
+
+// Move selected tabs based on checkboxes
+async function moveSelectedTabs(suggestion, suggestionIndex) {
+  console.log('moveSelectedTabs called with:', { suggestion, suggestionIndex });
+
+  // Show warning if first time
+  const shouldProceed = await showMoveWarningIfNeeded();
+  if (!shouldProceed) return;
+
+  const container = document.getElementById('consolidationSuggestions');
+  const checkboxes = container.querySelectorAll(`.stray-window-checkbox[data-suggestion="${suggestionIndex}"]:checked`);
+
+  console.log('Found checkboxes:', checkboxes.length);
+
+  const windowIdsToMove = Array.from(checkboxes).map(cb => parseInt(cb.dataset.window));
+  console.log('Windows to move from:', windowIdsToMove);
+
+  if (windowIdsToMove.length === 0) {
+    alert('No windows selected! Please check at least one window to move tabs from.');
+    return;
+  }
+
+  let movedCount = 0;
+  const errors = [];
+
+  console.log('Starting to move tabs. Total stray tabs:', suggestion.strayTabs.length);
+
+  for (const stray of suggestion.strayTabs) {
+    console.log(`Checking stray tab from window ${stray.fromWindowId}, should move:`, windowIdsToMove.includes(stray.fromWindowId));
+
+    if (windowIdsToMove.includes(stray.fromWindowId)) {
+      try {
+        console.log(`Moving tab ${stray.tab.id} (${stray.tab.title}) from window ${stray.fromWindowId} to ${suggestion.homeWindowId}`);
+
+        // Safari doesn't support browser.tabs.move with windowId parameter
+        // Workaround: create new tab in target window, then close original
+        const newTab = await browser.tabs.create({
+          windowId: suggestion.homeWindowId,
+          url: stray.tab.url,
+          active: false
+        });
+        console.log('Created new tab:', newTab.id);
+
+        await browser.tabs.remove(stray.tab.id);
+        console.log('Removed old tab:', stray.tab.id);
+
+        movedCount++;
+      } catch (e) {
+        console.error('Error moving tab:', e);
+        errors.push({ tab: stray.tab.title, error: e.message });
+      }
+    }
+  }
+
+  console.log(`Finished moving. Total moved: ${movedCount}`);
+
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  if (errors.length > 0) {
+    console.error('Move errors:', errors);
+    alert(`Moved ${movedCount} tabs. ${errors.length} failed to move. Check console for details.`);
+  } else {
+    alert(`Moved ${movedCount} tabs to Window ${suggestion.homeWindowId}`);
+  }
+
+  // Refresh suggestions
+  await analyzeAndShowSuggestions();
+}
+
+// Move all tabs for a suggestion
+async function moveAllTabs(suggestion) {
+  console.log('moveAllTabs called with:', suggestion);
+
+  // Show warning if first time
+  const shouldProceed = await showMoveWarningIfNeeded();
+  if (!shouldProceed) return;
+
+  let movedCount = 0;
+  const errors = [];
+
+  for (const stray of suggestion.strayTabs) {
+    try {
+      console.log(`Moving tab ${stray.tab.id} from window ${stray.fromWindowId} to ${suggestion.homeWindowId}`);
+
+      // Safari doesn't support browser.tabs.move with windowId parameter
+      // Workaround: create new tab in target window, then close original
+      await browser.tabs.create({
+        windowId: suggestion.homeWindowId,
+        url: stray.tab.url,
+        active: false
+      });
+
+      await browser.tabs.remove(stray.tab.id);
+      movedCount++;
+    } catch (e) {
+      console.error('Error moving tab:', e);
+      errors.push({ tab: stray.tab.title, error: e.message });
+    }
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  if (errors.length > 0) {
+    console.error('Move errors:', errors);
+    alert(`Moved ${movedCount} tabs. ${errors.length} failed to move. Check console for details.`);
+  } else {
+    alert(`Moved ${movedCount} tabs to Window ${suggestion.homeWindowId}`);
+  }
+
+  // Refresh suggestions
+  await analyzeAndShowSuggestions();
 }
 
 // Save current session

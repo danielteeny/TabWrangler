@@ -1,6 +1,6 @@
 //
 //  SafariWebExtensionHandler.swift
-//  TabWrangler Extension
+//  TabWife Extension
 //
 //  Created by Daniel Teeny on 11/10/25.
 //

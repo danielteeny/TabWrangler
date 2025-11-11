@@ -1,6 +1,6 @@
 //
 //  AppDelegate.swift
-//  TabWrangler
+//  TabWife
 //
 //  Created by Daniel Teeny on 11/10/25.
 //
