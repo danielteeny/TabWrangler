@@ -1,7 +1,7 @@
 // tabUtils.js - Utility functions for tab matching and grouping
 
 const TabUtils = {
-  findDuplicates(tabs, matchMode = 'domain') {
+  findDuplicates(tabs, matchMode = 'fullpath') {
     const groups = [];
     const processed = new Set();
 
@@ -29,6 +29,14 @@ const TabUtils = {
     return { groups, totalDuplicates };
   },
 
+  isIPAddress(hostname) {
+    // Check for IPv4
+    const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+    // Check for IPv6 (simplified)
+    const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+    return ipv4Pattern.test(hostname) || ipv6Pattern.test(hostname) || hostname === 'localhost';
+  },
+
   matchTabs(tab1, tab2, matchMode) {
     try {
       const url1 = new URL(tab1.url);
@@ -38,6 +46,10 @@ const TabUtils = {
         case 'exact':
           return tab1.url === tab2.url;
 
+        case 'port':
+          // Match hostname + port (perfect for self-hosted services)
+          return url1.hostname === url2.hostname && url1.port === url2.port;
+
         case 'domain':
           return this.getRootDomain(url1.hostname) === this.getRootDomain(url2.hostname);
 
@@ -45,15 +57,21 @@ const TabUtils = {
           return url1.host === url2.host;
 
         case 'path':
-          return url1.hostname === url2.hostname && url1.pathname === url2.pathname;
+          return url1.hostname === url2.hostname &&
+                 url1.port === url2.port &&
+                 url1.pathname === url2.pathname;
 
         case 'fullpath':
           return url1.hostname === url2.hostname &&
+                 url1.port === url2.port &&
                  url1.pathname === url2.pathname &&
                  url1.search === url2.search;
 
         default:
-          return this.getRootDomain(url1.hostname) === this.getRootDomain(url2.hostname);
+          return url1.hostname === url2.hostname &&
+                 url1.port === url2.port &&
+                 url1.pathname === url2.pathname &&
+                 url1.search === url2.search;
       }
     } catch (e) {
       return false;
@@ -61,6 +79,12 @@ const TabUtils = {
   },
 
   getRootDomain(hostname) {
+    // For IP addresses or localhost, return as-is
+    if (this.isIPAddress(hostname)) {
+      return hostname;
+    }
+
+    // For domain names, extract root domain
     const parts = hostname.split('.');
     if (parts.length <= 2) return hostname;
     return parts.slice(-2).join('.');
@@ -69,10 +93,14 @@ const TabUtils = {
   getDisplayUrl(url, matchMode) {
     try {
       const urlObj = new URL(url);
+      const hostWithPort = urlObj.port ? `${urlObj.hostname}:${urlObj.port}` : urlObj.hostname;
 
       switch (matchMode) {
         case 'exact':
           return url;
+
+        case 'port':
+          return hostWithPort;
 
         case 'domain':
           return this.getRootDomain(urlObj.hostname);
@@ -81,13 +109,13 @@ const TabUtils = {
           return urlObj.host;
 
         case 'path':
-          return urlObj.hostname + urlObj.pathname;
+          return hostWithPort + urlObj.pathname;
 
         case 'fullpath':
-          return urlObj.hostname + urlObj.pathname + urlObj.search;
+          return hostWithPort + urlObj.pathname + urlObj.search;
 
         default:
-          return urlObj.hostname;
+          return hostWithPort + urlObj.pathname + urlObj.search;
       }
     } catch (e) {
       return url;
@@ -101,12 +129,13 @@ const TabUtils = {
       try {
         const url = new URL(tab.url);
         const domain = this.getRootDomain(url.hostname);
+        const key = url.port ? `${domain}:${url.port}` : domain;
 
-        if (!groups[domain]) {
-          groups[domain] = [];
+        if (!groups[key]) {
+          groups[key] = [];
         }
 
-        groups[domain].push(tab);
+        groups[key].push(tab);
       } catch (e) {
         // Skip invalid URLs
       }

@@ -13,11 +13,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Load user settings
 async function loadSettings() {
   const result = await browser.storage.sync.get({
-    matchMode: 'domain',
+    matchMode: 'fullpath',
     autoDetect: true,
     keepNewest: true
   });
   userSettings = result;
+
+  // Update UI controls
+  document.getElementById('matchMode').value = userSettings.matchMode;
+  document.getElementById('autoDetect').checked = userSettings.autoDetect;
+  document.getElementById('keepNewest').checked = userSettings.keepNewest;
+}
+
+// Save settings
+async function saveSettings() {
+  userSettings.matchMode = document.getElementById('matchMode').value;
+  userSettings.autoDetect = document.getElementById('autoDetect').checked;
+  userSettings.keepNewest = document.getElementById('keepNewest').checked;
+
+  await browser.storage.sync.set(userSettings);
+  await updateStats();
 }
 
 // Update tab statistics
@@ -79,9 +94,17 @@ function attachEventListeners() {
     await showSavedSessions();
   });
 
-  // Open settings
-  document.getElementById('openSettings').addEventListener('click', () => {
-    browser.runtime.openOptionsPage();
+  // Settings controls
+  document.getElementById('matchMode').addEventListener('change', async () => {
+    await saveSettings();
+  });
+
+  document.getElementById('autoDetect').addEventListener('change', async () => {
+    await saveSettings();
+  });
+
+  document.getElementById('keepNewest').addEventListener('change', async () => {
+    await saveSettings();
   });
 }
 

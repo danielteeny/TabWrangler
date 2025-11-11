@@ -24,9 +24,33 @@
       </div>
     </div>
 
-    <div class="actions">
-      <h2>Quick Actions</h2>
+    <div class="settings-section">
+      <div class="setting-group">
+        <label for="matchMode">Match Mode:</label>
+        <select id="matchMode" class="setting-select">
+          <option value="exact">Exact URL</option>
+          <option value="fullpath" selected>Full Path (URL + Query)</option>
+          <option value="path">Path Only</option>
+          <option value="port">Host + Port</option>
+          <option value="subdomain">Subdomain</option>
+          <option value="domain">Domain Only</option>
+        </select>
+      </div>
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="keepNewest" checked>
+          <span>Keep newest duplicate</span>
+        </label>
+      </div>
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoDetect" checked>
+          <span>Auto-detect duplicates</span>
+        </label>
+      </div>
+    </div>
 
+    <div class="actions">
       <div class="action-section">
         <h3>Duplicate Management</h3>
         <button class="action-btn" id="findDuplicates">
@@ -74,10 +98,6 @@
         All Windows
       </label>
     </div>
-
-    <footer>
-      <button class="settings-btn" id="openSettings">⚙️ Settings</button>
-    </footer>
 
     <div id="duplicatesList" class="duplicates-list hidden"></div>
     <div id="sessionsList" class="sessions-list hidden"></div>

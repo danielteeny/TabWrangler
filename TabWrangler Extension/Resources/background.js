@@ -12,7 +12,7 @@ browser.runtime.onInstalled.addListener(async () => {
 // Load settings
 async function loadSettings() {
   const result = await browser.storage.sync.get({
-    matchMode: 'domain',
+    matchMode: 'fullpath',
     autoDetect: true,
     keepNewest: true,
     notifyDuplicates: true
