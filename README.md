@@ -10,7 +10,9 @@ A powerful Safari extension for organizing and managing browser tabs. TabWrangle
 - **Port-Based Matching**: Distinguishes between services on different ports (e.g., `192.168.1.100:8080` vs `192.168.1.100:3000`)
 - **Auto-Detection**: Automatically detects duplicates as you browse
 - **Auto-Updating List**: Duplicate tabs are automatically displayed and updated in real-time
-- **Individual Controls**: Close specific duplicate groups with dedicated close buttons
+- **Expandable Groups**: Expand duplicate groups to see and manage individual tabs
+- **Tab Navigation**: Click any tab title in an expanded group to switch to that tab
+- **Individual Controls**: Close specific duplicate groups or individual tabs with dedicated close buttons
 - **Pinned Tab Protection**: Pinned tabs are automatically excluded from duplicate detection
 - **Flexible Options**: Choose to keep the newest or oldest duplicate
 - **Match Mode Descriptions**: Dynamic descriptions explain each match mode as you select it
@@ -82,9 +84,13 @@ Click the TabWrangler icon in Safari's toolbar to open the popup interface.
 The duplicate list automatically updates and displays in real-time. You can:
 
 1. **View Duplicates**: Duplicate groups are automatically shown with count badges
-2. **Close Individual Groups**: Click the ✕ button on any duplicate group to close just that group
-3. **Close All Duplicates**: Click **"Close Duplicates"** to remove all duplicates at once (keeping one tab per group)
-4. **Refresh List**: Click **"Find Duplicates"** to manually refresh the duplicate list
+2. **Expand Groups**: Click the ▶ button on any duplicate group to expand and see individual tabs within that group
+   - Click the tab title to switch to that tab
+   - Click the ✕ button on an individual tab to close just that tab
+   - Click ▼ to collapse the group again
+3. **Close Individual Groups**: Click the ✕ button on any duplicate group header to close all duplicates in that group (keeping one tab)
+4. **Close All Duplicates**: Click **"Close Duplicates"** to remove all duplicates at once (keeping one tab per group)
+5. **Refresh List**: Click **"Find Duplicates"** to manually refresh the duplicate list
 
 ### Organizing Tabs
 
@@ -166,7 +172,9 @@ TabWrangler/
 #### User Interface Enhancements
 - **Auto-Updating Duplicates**: Duplicate list updates automatically when tabs change
 - **Visual Feedback**: Count badges show the number of duplicates in each group
-- **Individual Controls**: Each duplicate group has its own close button
+- **Expandable Groups**: Click ▶/▼ to expand/collapse groups and view individual tabs
+- **Tab Interaction**: Click tab titles to switch to tabs, or close individual tabs
+- **Individual Controls**: Each duplicate group has its own close button, plus individual tab controls
 - **XSS Protection**: URLs are properly escaped for safe display
 - **Pinned Tab Filtering**: Pinned tabs are excluded from all operations
 - **Improved Layout**: Scope selector moved to top for better workflow
