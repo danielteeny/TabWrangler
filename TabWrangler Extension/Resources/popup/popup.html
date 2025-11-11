@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TabWrangler</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>TabWrangler</h1>
+      <p class="subtitle">Organize and manage your tabs</p>
+    </header>
+
+    <div class="tab-stats">
+      <div class="stat">
+        <span class="stat-label">Open Tabs:</span>
+        <span class="stat-value" id="totalTabs">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Duplicates:</span>
+        <span class="stat-value" id="duplicateCount">0</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <h2>Quick Actions</h2>
+
+      <div class="action-section">
+        <h3>Duplicate Management</h3>
+        <button class="action-btn" id="findDuplicates">
+          <span class="icon">🔍</span>
+          Find Duplicates
+        </button>
+        <button class="action-btn" id="closeDuplicates">
+          <span class="icon">✕</span>
+          Close Duplicates
+        </button>
+      </div>
+
+      <div class="action-section">
+        <h3>Tab Organization</h3>
+        <button class="action-btn" id="groupByDomain">
+          <span class="icon">📁</span>
+          Group by Domain
+        </button>
+        <button class="action-btn" id="reorderTabs">
+          <span class="icon">⇅</span>
+          Reorder by Domain
+        </button>
+      </div>
+
+      <div class="action-section">
+        <h3>Session Management</h3>
+        <button class="action-btn" id="saveSession">
+          <span class="icon">💾</span>
+          Save Current Session
+        </button>
+        <button class="action-btn" id="restoreSession">
+          <span class="icon">📂</span>
+          Restore Session
+        </button>
+      </div>
+    </div>
+
+    <div class="scope-selector">
+      <label>
+        <input type="radio" name="scope" value="current" checked>
+        Current Window
+      </label>
+      <label>
+        <input type="radio" name="scope" value="all">
+        All Windows
+      </label>
+    </div>
+
+    <footer>
+      <button class="settings-btn" id="openSettings">⚙️ Settings</button>
+    </footer>
+
+    <div id="duplicatesList" class="duplicates-list hidden"></div>
+    <div id="sessionsList" class="sessions-list hidden"></div>
+  </div>
+
+  <script src="../utils/tabUtils.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
