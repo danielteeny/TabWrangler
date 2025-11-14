@@ -13,7 +13,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Load user settings
 async function loadSettings() {
   const result = await browser.storage.sync.get({
-    matchMode: 'fullpath',
+    matchDomain: true,
+    matchSubdomain: true,
+    matchPort: true,
+    matchPath: true,
+    matchQuery: true,
+    matchHash: false,
     autoDetect: true,
     keepNewest: true,
     consolidationThreshold: 3,
@@ -22,37 +27,31 @@ async function loadSettings() {
   });
   userSettings = result;
 
-  // Update UI controls
-  document.getElementById('matchMode').value = userSettings.matchMode;
+  // Update UI controls - match checkboxes
+  document.getElementById('matchDomain').checked = userSettings.matchDomain;
+  document.getElementById('matchSubdomain').checked = userSettings.matchSubdomain;
+  document.getElementById('matchPort').checked = userSettings.matchPort;
+  document.getElementById('matchPath').checked = userSettings.matchPath;
+  document.getElementById('matchQuery').checked = userSettings.matchQuery;
+  document.getElementById('matchHash').checked = userSettings.matchHash;
+
+  // Update UI controls - other settings
   document.getElementById('autoDetect').checked = userSettings.autoDetect;
   document.getElementById('keepNewest').checked = userSettings.keepNewest;
   document.getElementById('consolidationThreshold').value = userSettings.consolidationThreshold;
   document.getElementById('thresholdValue').textContent = userSettings.consolidationThreshold;
   document.getElementById('persistWindowConfig').checked = userSettings.persistWindowConfig;
   document.getElementById('autoOrganizeTabs').checked = userSettings.autoOrganizeTabs;
-
-  // Update match mode description
-  updateMatchModeDescription();
-}
-
-// Update match mode description
-function updateMatchModeDescription() {
-  const matchMode = document.getElementById('matchMode').value;
-  const descriptions = {
-    'exact': 'Complete URL must match exactly (including hash)',
-    'fullpath': 'Host + port + path + query parameters must match',
-    'path': 'Host + port + path only (ignores query parameters)',
-    'port': 'Hostname + port only (perfect for self-hosted services)',
-    'subdomain': 'Exact subdomain match (www.example.com ≠ api.example.com)',
-    'domain': 'Root domain only (www.example.com = api.example.com)'
-  };
-
-  document.getElementById('matchModeDesc').textContent = descriptions[matchMode] || '';
 }
 
 // Save settings
 async function saveSettings() {
-  userSettings.matchMode = document.getElementById('matchMode').value;
+  userSettings.matchDomain = document.getElementById('matchDomain').checked;
+  userSettings.matchSubdomain = document.getElementById('matchSubdomain').checked;
+  userSettings.matchPort = document.getElementById('matchPort').checked;
+  userSettings.matchPath = document.getElementById('matchPath').checked;
+  userSettings.matchQuery = document.getElementById('matchQuery').checked;
+  userSettings.matchHash = document.getElementById('matchHash').checked;
   userSettings.autoDetect = document.getElementById('autoDetect').checked;
   userSettings.keepNewest = document.getElementById('keepNewest').checked;
   userSettings.consolidationThreshold = parseInt(document.getElementById('consolidationThreshold').value);
@@ -60,7 +59,6 @@ async function saveSettings() {
   userSettings.autoOrganizeTabs = document.getElementById('autoOrganizeTabs').checked;
 
   await browser.storage.sync.set(userSettings);
-  updateMatchModeDescription();
   await updateStats();
   await updateDuplicatesList();
 
@@ -73,7 +71,7 @@ async function saveSettings() {
 // Update tab statistics
 async function updateStats() {
   const tabs = await getTabs();
-  const duplicates = TabUtils.findDuplicates(tabs, userSettings.matchMode);
+  const duplicates = TabUtils.findDuplicates(tabs, userSettings);
 
   document.getElementById('totalTabs').textContent = tabs.length;
   document.getElementById('duplicateCount').textContent = duplicates.totalDuplicates;
@@ -85,7 +83,7 @@ async function updateStats() {
 // Update duplicates manifest list
 async function updateDuplicatesList() {
   const tabs = await getTabs();
-  const duplicates = TabUtils.findDuplicates(tabs, userSettings.matchMode);
+  const duplicates = TabUtils.findDuplicates(tabs, userSettings);
 
   const listElement = document.getElementById('duplicatesList');
 
@@ -232,11 +230,6 @@ function attachEventListeners() {
     });
   });
 
-  // Find duplicates
-  document.getElementById('findDuplicates').addEventListener('click', async () => {
-    await findAndDisplayDuplicates();
-  });
-
   // Close duplicates
   document.getElementById('closeDuplicates').addEventListener('click', async () => {
     await closeDuplicates();
@@ -267,9 +260,51 @@ function attachEventListeners() {
     await showSavedSessions();
   });
 
-  // Settings controls
-  document.getElementById('matchMode').addEventListener('change', async () => {
-    await saveSettings();
+  // Settings controls - Match checkboxes
+  ['matchDomain', 'matchSubdomain', 'matchPort', 'matchPath', 'matchQuery', 'matchHash'].forEach(id => {
+    document.getElementById(id).addEventListener('change', async () => {
+      await saveSettings();
+    });
+  });
+
+  // Preset buttons
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const preset = btn.dataset.preset;
+
+      // Remove active class from all preset buttons
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Set checkboxes based on preset
+      if (preset === 'relaxed') {
+        // Only domain must match
+        document.getElementById('matchDomain').checked = true;
+        document.getElementById('matchSubdomain').checked = false;
+        document.getElementById('matchPort').checked = false;
+        document.getElementById('matchPath').checked = false;
+        document.getElementById('matchQuery').checked = false;
+        document.getElementById('matchHash').checked = false;
+      } else if (preset === 'normal') {
+        // Domain + subdomain + port + path + query (like old fullpath default)
+        document.getElementById('matchDomain').checked = true;
+        document.getElementById('matchSubdomain').checked = true;
+        document.getElementById('matchPort').checked = true;
+        document.getElementById('matchPath').checked = true;
+        document.getElementById('matchQuery').checked = true;
+        document.getElementById('matchHash').checked = false;
+      } else if (preset === 'strict') {
+        // Everything must match
+        document.getElementById('matchDomain').checked = true;
+        document.getElementById('matchSubdomain').checked = true;
+        document.getElementById('matchPort').checked = true;
+        document.getElementById('matchPath').checked = true;
+        document.getElementById('matchQuery').checked = true;
+        document.getElementById('matchHash').checked = true;
+      }
+
+      saveSettings();
+    });
   });
 
   document.getElementById('autoDetect').addEventListener('change', async () => {
@@ -305,7 +340,7 @@ async function findAndDisplayDuplicates() {
 // Close duplicate tabs
 async function closeDuplicates() {
   const tabs = await getTabs();
-  const duplicates = TabUtils.findDuplicates(tabs, userSettings.matchMode);
+  const duplicates = TabUtils.findDuplicates(tabs, userSettings);
 
   const tabsToClose = [];
   duplicates.groups.forEach(group => {
@@ -322,6 +357,13 @@ async function closeDuplicates() {
   });
 
   if (tabsToClose.length > 0) {
+    const keptCount = duplicates.groups.length;
+    const confirmMessage = `Close ${tabsToClose.length} duplicate tab${tabsToClose.length > 1 ? 's' : ''}? (keeps ${keptCount} tab${keptCount > 1 ? 's' : ''})`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
     await browser.tabs.remove(tabsToClose);
     // Wait a bit for browser to update tab list
     await new Promise(resolve => setTimeout(resolve, 100));

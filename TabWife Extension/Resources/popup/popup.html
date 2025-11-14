@@ -37,16 +37,44 @@
 
     <div class="settings-section">
       <div class="setting-group">
-        <label for="matchMode">Match Mode:</label>
-        <select id="matchMode" class="setting-select">
-          <option value="exact">Exact URL</option>
-          <option value="fullpath" selected>Full Path (URL + Query)</option>
-          <option value="path">Path Only</option>
-          <option value="port">Host + Port</option>
-          <option value="subdomain">Subdomain</option>
-          <option value="domain">Domain Only</option>
-        </select>
-        <p class="match-mode-description" id="matchModeDesc">Host + port + path + query parameters must match</p>
+        <label>Tabs are duplicates when these match:</label>
+        <div class="match-presets">
+          <button class="preset-btn" data-preset="relaxed">Relaxed</button>
+          <button class="preset-btn active" data-preset="normal">Normal</button>
+          <button class="preset-btn" data-preset="strict">Strict</button>
+        </div>
+        <div class="match-checkboxes">
+          <label class="checkbox-label">
+            <input type="checkbox" id="matchDomain" checked>
+            <span>Domain</span>
+            <span class="checkbox-hint">(example.com)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="matchSubdomain" checked>
+            <span>Subdomain</span>
+            <span class="checkbox-hint">(www vs app)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="matchPort" checked>
+            <span>Port</span>
+            <span class="checkbox-hint">(:8080 vs :3000)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="matchPath" checked>
+            <span>Path</span>
+            <span class="checkbox-hint">(/page1 vs /page2)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="matchQuery" checked>
+            <span>Query parameters</span>
+            <span class="checkbox-hint">(?id=1 vs ?id=2)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="matchHash">
+            <span>Hash</span>
+            <span class="checkbox-hint">(#section1 vs #section2)</span>
+          </label>
+        </div>
       </div>
       <div class="setting-group">
         <label class="checkbox-label">
@@ -86,10 +114,6 @@
     <div class="actions">
       <div class="action-section">
         <h3>Duplicate Management</h3>
-        <button class="action-btn" id="findDuplicates">
-          <span class="icon">🔍</span>
-          Find Duplicates
-        </button>
         <button class="action-btn" id="closeDuplicates">
           <span class="icon">✕</span>
           Close Duplicates
@@ -104,11 +128,11 @@
         <h3>Tab Organization</h3>
         <button class="action-btn" id="analyzeOrganization">
           <span class="icon">🔍</span>
-          Analyze Organization
+          Show Suggestions
         </button>
         <button class="action-btn" id="smartOrganize">
           <span class="icon">✨</span>
-          Smart Organize
+          Auto-Organize All
         </button>
         <button class="action-btn" id="manageWindows">
           <span class="icon">🪟</span>

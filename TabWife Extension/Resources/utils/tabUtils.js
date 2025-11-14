@@ -1,7 +1,7 @@
 // tabUtils.js - Utility functions for tab matching and grouping
 
 const TabUtils = {
-  findDuplicates(tabs, matchMode = 'fullpath') {
+  findDuplicates(tabs, settings) {
     const groups = [];
     const processed = new Set();
 
@@ -10,12 +10,12 @@ const TabUtils = {
 
       const duplicates = tabs.filter((otherTab, otherIndex) => {
         if (index === otherIndex || processed.has(otherTab.id)) return false;
-        return this.matchTabs(tab, otherTab, matchMode);
+        return this.matchTabs(tab, otherTab, settings);
       });
 
       if (duplicates.length > 0) {
         const group = {
-          url: this.getDisplayUrl(tab.url, matchMode),
+          url: tab.url, // Just show the full URL
           tabs: [tab, ...duplicates]
         };
 
@@ -37,42 +37,44 @@ const TabUtils = {
     return ipv4Pattern.test(hostname) || ipv6Pattern.test(hostname) || hostname === 'localhost';
   },
 
-  matchTabs(tab1, tab2, matchMode) {
+  matchTabs(tab1, tab2, settings) {
     try {
       const url1 = new URL(tab1.url);
       const url2 = new URL(tab2.url);
 
-      switch (matchMode) {
-        case 'exact':
-          return tab1.url === tab2.url;
-
-        case 'port':
-          // Match hostname + port (perfect for self-hosted services)
-          return url1.hostname === url2.hostname && url1.port === url2.port;
-
-        case 'domain':
-          return this.getRootDomain(url1.hostname) === this.getRootDomain(url2.hostname);
-
-        case 'subdomain':
-          return url1.host === url2.host;
-
-        case 'path':
-          return url1.hostname === url2.hostname &&
-                 url1.port === url2.port &&
-                 url1.pathname === url2.pathname;
-
-        case 'fullpath':
-          return url1.hostname === url2.hostname &&
-                 url1.port === url2.port &&
-                 url1.pathname === url2.pathname &&
-                 url1.search === url2.search;
-
-        default:
-          return url1.hostname === url2.hostname &&
-                 url1.port === url2.port &&
-                 url1.pathname === url2.pathname &&
-                 url1.search === url2.search;
+      // Check domain
+      if (settings.matchDomain) {
+        const domain1 = this.getRootDomain(url1.hostname);
+        const domain2 = this.getRootDomain(url2.hostname);
+        if (domain1 !== domain2) return false;
       }
+
+      // Check subdomain
+      if (settings.matchSubdomain) {
+        if (url1.hostname !== url2.hostname) return false;
+      }
+
+      // Check port
+      if (settings.matchPort) {
+        if (url1.port !== url2.port) return false;
+      }
+
+      // Check path
+      if (settings.matchPath) {
+        if (url1.pathname !== url2.pathname) return false;
+      }
+
+      // Check query parameters
+      if (settings.matchQuery) {
+        if (url1.search !== url2.search) return false;
+      }
+
+      // Check hash
+      if (settings.matchHash) {
+        if (url1.hash !== url2.hash) return false;
+      }
+
+      return true;
     } catch (e) {
       return false;
     }

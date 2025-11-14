@@ -73,7 +73,7 @@ popup.js loads
 
 ### Storage Strategy
 
-- **browser.storage.sync**: Settings (matchMode, autoDetect, keepNewest, consolidationThreshold, persistWindowConfig, autoOrganizeTabs)
+- **browser.storage.sync**: Settings (matchDomain, matchSubdomain, matchPort, matchPath, matchQuery, matchHash, autoDetect, keepNewest, consolidationThreshold, persistWindowConfig, autoOrganizeTabs)
   - Syncs across Safari instances
   - Limited to ~10MB
 - **browser.storage.local**: Window configurations (windowDomains, windowKeywords, windowNicknames), sessions, UI state
@@ -145,13 +145,22 @@ await browser.tabs.remove(originalTabId);
 | `formatWindowDisplay(windowId)` | Returns nickname or "Window {id}" |
 | `getAllDomains(windows)` | Returns sorted array of all unique domains (excludes pinned tabs) |
 
-**Match Modes** (critical for deduplication):
-1. `exact` - Full URL including hash
-2. `fullpath` - hostname + port + pathname + query (DEFAULT)
-3. `path` - hostname + port + pathname only (ignores query params)
-4. `port` - hostname + port only (for self-hosted services)
-5. `subdomain` - Exact subdomain match
-6. `domain` - Root domain only (collapses subdomains)
+**Match System** (checkbox-based, flexible matching):
+
+Users build custom match criteria by checking which components must match:
+- `matchDomain` - Root domain (e.g., example.com)
+- `matchSubdomain` - Full hostname including subdomain (e.g., www vs app)
+- `matchPort` - Port number (e.g., :8080 vs :3000)
+- `matchPath` - URL path (e.g., /page1 vs /page2)
+- `matchQuery` - Query parameters (e.g., ?id=1 vs ?id=2)
+- `matchHash` - Hash fragment (e.g., #section1 vs #section2)
+
+**Presets** (applied via buttons in UI):
+1. **Relaxed** - Only domain must match (collapses all subdomains, ports, paths)
+2. **Normal** (DEFAULT) - Domain + subdomain + port + path + query (like old "fullpath")
+3. **Strict** - Everything including hash
+
+**Implementation**: `matchTabs()` checks each enabled flag. All enabled checks must pass for tabs to match.
 
 **IP Address Handling** (`tabUtils.js:82-85`):
 - Special case: IP addresses (IPv4/IPv6/localhost) returned as-is
